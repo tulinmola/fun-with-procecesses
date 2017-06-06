@@ -1,0 +1,432 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>Fun with processes</title>
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/white.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section>
+					<h1>Fun with processes</h1>
+					<h3>The actor model and its facilities using OTP</h3>
+					<p>
+						<small>by <a href="http://twitter.com/tulinmola">@tulinmola</a></small>
+					</p>
+				</section>
+				<section>
+					<h2>Some concepts: Concurrency VS Parallelism</h2>
+				</section>
+				<section>
+					<img width="128" height="128" src="https://seeklogo.com/images/J/Java_Duke-logo-6752FE1037-seeklogo.com.gif"/>
+				</section>
+				<section>
+					<img width="128" height="128" src="https://www.iconfinder.com/data/icons/nodejs-1/512/nodejs-512.png"/>
+				</section>
+				<section>
+					<h2>The actor model</h2>
+					<p>In response to a message an actor can:</p>
+					<ul>
+						<li class="fragment">Make local decisions
+						<li class="fragment">Create more actors
+						<li class="fragment">Send more messages
+						<li class="fragment">Determine how to respond to the next message received
+					</ul>
+					<p class="fragment">Note that: <b>actors can only affect each other through messages</b>.</p>
+					<p>
+						<small><a href="https://en.wikipedia.org/wiki/Actor_model">https://en.wikipedia.org/wiki/Actor_model</a></small>
+					</p>
+					<aside class="notes">
+					</aside>
+				</section>
+				<section>
+					<h2>Elixir/Erlang processes 1/3</h2>
+					<ul>
+						<li class="fragment">Everything is a process
+						<li class="fragment">Processes are strongly isolated
+						<li class="fragment">Process creation and destruction is a lightweight operation
+					</ul>
+					<aside class="notes">
+						Erlang is designed for massive concurrency. Erlang processes are
+						lightweight (grow and shrink dynamically) with small memory footprint,
+						fast to create and terminate, and the scheduling overhead is low.
+					</aside>
+				</section>
+				<section>
+					<h2>Elixir/Erlang processes 2/3</h2>
+					<ul>
+						<li>Message passing is the only way for processes to interact
+						<li class="fragment">Processes have unique names
+						<li class="fragment">If you know the name of a process you can send it a message
+					</ul>
+					<aside class="notes">
+					</aside>
+				</section>
+				<section>
+					<h2>Elixir/Erlang processes 3/3</h2>
+					<ul>
+						<li>Processes share no resources.
+						<li class="fragment">Error handling is non-local.
+						<li class="fragment">Processes do what they are supposed to do or fail.
+					</ul>
+					<aside class="notes">
+						No locks needed. Supervisors. Fail fast.
+					</aside>
+				</section>
+				<section>
+					<h3>Joe Armstrong's' PhD thesis</h3>
+					<img width="128" height="128" src="http://68.media.tumblr.com/tumblr_ll9x7m4h9S1qakxac.jpg"/>
+					<p>
+						<a href="http://erlang.org/download/armstrong_thesis_2003.pdf">http://erlang.org/download/armstrong_thesis_2003.pdf</a>
+					</p>
+				</section>
+				<section>
+					<h2>Everything runs in a process</h2>
+					<p>The console example:</p>
+					<pre><code data-trim data-noescape>
+$ iex
+Erlang/OTP 19 [erts-8.2.2] [source] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false] [dtrace]
+
+Interactive Elixir (1.4.2) - press Ctrl+C to exit (type h() ENTER for help)
+
+iex(1)> <span class="fragment">self()
+#PID<0.80.0>
+iex(2)> </span><span class="fragment">Process.exit(self(), :normal)
+** (EXIT from #PID<0.80.0>) normal
+
+Interactive Elixir (1.4.2) - press Ctrl+C to exit (type h() ENTER for help)
+iex(1)> </span><span class="fragment">self()
+#PID<0.83.0></span>
+					</code></pre>
+				</section>
+				<section>
+					<h2>Creating a process</h2>
+					<pre><code data-trim data-noescape>
+iex(1)> <span class="fragment">pid = spawn(fn -> IO.puts "Hello from process" end)
+Hello from child process
+#PID<0.82.0>
+iex(2)> </span><span class="fragment">Process.alive?(pid)
+false</span>
+					</code></pre>
+				</section>
+				<section>
+					<h2>Receiving messages</h2>
+					<pre><code data-trim data-noescape>
+iex(1)> <span class="fragment">pid = spawn(fn ->
+...(1)>   receive do
+...(1)>     {:msg, text} -> IO.puts "Received #{text}"
+...(1)>   end
+...(1)> end)
+#PID<0.86.0>
+iex(2)> </span><span class="fragment">send(pid, {:msg, "hello"})
+Received hello
+{:msg, "hello"}
+iex(3)> </span><span class="fragment">Process.alive?(pid)
+false</span>
+					</code></pre>
+				</section>
+				<section>
+					<h2>Staying alive</h2>
+					<pre><code data-trim data-noescape>
+defmodule Greeter do
+  def loop() do
+    <span class="fragment">receive do
+      {:msg, text} -> IO.puts "Received #{text}"
+    end</span><span class="fragment">
+    loop()</span>
+  end
+end
+
+iex(1)> <span class="fragment">pid = spawn(&Greeter.loop/0)</span><span class="fragment">
+#PID<0.86.0>
+iex(2)> </span><span class="fragment">send(pid, {:msg, "hello"})
+Received hello
+iex(3)> </span><span class="fragment">send(pid, {:msg, "world"})
+Received world</span>
+					</code></pre>
+					<aside class="notes">
+						Tail recursion: If a tail call might lead to the same subroutine
+						being called again later in the call chain, the subroutine is said
+						to be tail-recursive, which is a special case of recursion.
+
+						Tail calls can be implemented without adding a new stack frame to
+						the call stack.
+					</aside>
+				</section>
+				<section>
+					<h2>Keeping state</h2>
+					<pre><code data-trim data-noescape>
+defmodule Counter do
+  # ...
+
+  <span class="fragment">def loop(counter) do
+    receive do<span class="fragment">
+      :count ->
+        IO.puts "Counter is #{counter}"
+        loop(counter + 1)
+      </span><span class="fragment">_ ->
+        loop(counter)</span>
+    end
+  end</span>
+end
+					</code></pre>
+				</section>
+				<section>
+					<h2>Process lifecycle</h2>
+					<img src="http://learnyousomeerlang.com/static/img/common-pattern.png" style="border:0"/>
+					<p>
+						<small><a href="http://learnyousomeerlang.com/what-is-otp">http://learnyousomeerlang.com/what-is-otp</a></small>
+					</p>
+				</section>
+				<section>
+					<h2>OTP to the rescue</h2>
+					<p>The “Open Telecom Platform”</p>
+					<aside class="notes">
+						OTP is a collection of useful middleware, libraries, and tools written
+						in Erlang. OTP: branding attempt before Ericsson released
+						Erlang/OTP as open source. However neither Erlang nor OTP is specific to
+						telecom applications.
+
+						Supported and maintained by the OTP product unit at Ericsson. Open
+						source in the late 90s: independence from a single vendor.
+					</aside>
+				</section>
+				<section>
+					<h2>OTP abstractions</h2>
+					<img src="http://learnyousomeerlang.com/static/img/abstraction-layers.png" style="border:0"/>
+					<p>
+						<small><a href="http://learnyousomeerlang.com/what-is-otp">http://learnyousomeerlang.com/what-is-otp</a></small>
+					</p>
+				</section>
+				<section>
+					<img width="75%" height="75%" src="images/qwords/feature.png"/>
+					<br/>
+					<img src="images/qwords/googleplay.png" style="border:0"/>
+					<img src="images/qwords/appstore.png" style="border:0; opacity:0.3"/>
+					<p>
+						<a href="https://qwords-app.com/">https://qwords-app.com/</a>
+					</p>
+				</section>
+				<section>
+					<img width="40%" height="40%" src="images/qwords/screenshot00.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/screenshot01.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/solitaire01.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/solitaire02.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/solitaire03.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/solitaire04.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/solitaire05.png"/>
+				</section>
+				<section>
+					<h2>Multiplayer online</h2>
+					<p>
+						<a href="https://qwords-app.com/">https://qwords-app.com/</a>
+					</p>
+				</section>
+				<section>
+					<img width="40%" height="40%" src="images/qwords/multiplayer00.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/multiplayer01.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/multiplayer02.png"/>
+				</section>
+				<section data-transition="none">
+					<img width="40%" height="40%" src="images/qwords/multiplayer03.png"/>
+				</section>
+				<section>
+					<h2>Shall we play a game?</h2>
+					<img class="fragment" width="30%" height="30%" src="https://68.media.tumblr.com/538855b3e8a16e15f22bb3c113e81982/tumblr_o9djrjdrW81s2wio8o1_500.gif"/>
+					<p>
+						<a href="https://qwords-app.com/">https://qwords-app.com/</a>
+					</p>
+				</section>
+				<section>
+					<h2>OTP abstractions (revisited)</h2>
+					<img src="http://learnyousomeerlang.com/static/img/abstraction-layers.png" style="border:0"/>
+					<p>
+						<small><a href="http://learnyousomeerlang.com/what-is-otp">http://learnyousomeerlang.com/what-is-otp</a></small>
+					</p>
+				</section>
+				<section>
+					<h2>Agent example: Dictionary</h2>
+					<pre style="font-size: 0.50em;"><code data-trim data-noescape>
+						defmodule QwordsEngine.Dictionary do
+						  <span class="fragment" data-fragment-index="1">def start_link(locale) do
+						    Agent.start_link(fn -> load(locale) end)
+						  end</span>
+
+						  <span class="fragment" data-fragment-index="3">def random_word(dictionary) do
+						    Agent.get(dictionary, fn words -> Enum.random(words) end)
+						  end</span>
+
+						  <span class="fragment" data-fragment-index="2">defp load(locale) do
+						    :qwords_engine
+						    |> Application.app_dir("priv/dictionaries/#{locale}.txt")
+						    |> File.read!()
+						    |> String.split("\n")
+						  end</span>
+						end
+					</code></pre>
+				</section>
+				<section>
+					<h2>GenServer example: Game 1/3</h2>
+					<pre style="font-size: 0.50em;"><code data-trim data-noescape class="elixir">
+defmodule QwordsEngine.Game do
+  use GenServer
+
+  <span class="fragment" data-fragment-index="1">defstruct [name: "", word: "", size: 4, board: nil, players: [],
+             num_players: 2, max_score: 5]</span>
+
+  <span class="fragment" data-fragment-index="3">def find_by_name(name) do
+    :global.whereis_name(name)
+  end</span>
+
+  <span class="fragment" data-fragment-index="2">def start_link(state) do
+    GenServer.start_link(Game, state, name: {:global, state.name})
+  end</span>
+
+  <span class="fragment" data-fragment-index="3"># more code...</span>
+end
+					</code></pre>
+				</section>
+				<section>
+					<h2>GenServer example: Game 2/3</h2>
+					<pre><code data-trim data-noescape class="elixir">
+defmodule QwordsEngine.Game do
+  # ...
+
+  <span class="fragment"># Client
+  def count(game), do: GenServer.call(game, :count)</span>
+
+  <span class="fragment"># Server (callbacks)
+  def handle_call(:count, _from, state) do
+    {:reply, length(state.players), state}
+  end
+
+  # more code...</span>
+end
+					</code></pre>
+				</section>
+				<section>
+					<h2>GenServer example: Game 3/3</h2>
+					<pre style="font-size: 0.50em;"><code data-trim data-noescape class="elixir">
+defmodule QwordsEngine.Game do
+  # ...
+
+  <span class="fragment"># Client
+  defp next_board(game), do: GenServer.cast(game, :next_board)</span>
+  <span class="fragment">def broadcast(game, data), do: GenServer.cast(game, {:broadcast, data})
+
+  # Server (callbacks)
+  def handle_cast(:next_board, state) do
+    board = BoardFactory.create(state.word, state.size)
+    broadcast(self(), {:board, board})
+    {:noreply, %Game{state | board: board}}
+  end
+
+  # more code...</span>
+end
+					</code></pre>
+				</section>
+				<section>
+					<h2>Qwords engine</h2>
+				</section>
+				<section>
+					<img src="images/qwords/qwords_engine00.png"/>
+				</section>
+				<section data-transition="none">
+					<img src="images/qwords/qwords_engine01.png"/>
+				</section>
+				<section>
+					<h2>Qwords interface</h2>
+				</section>
+				<section>
+					<img src="images/qwords/qwords_interface00.png"/>
+				</section>
+				<section data-transition="none">
+					<img src="images/qwords/qwords_interface01.png"/>
+				</section>
+				<section>
+					<h2>Working diagram</h2>
+				</section>
+				<section>
+					<img src="images/qwords/qwords_interface02.png"/>
+				</section>
+				<section data-transition="none">
+					<img src="images/qwords/qwords_interface03.png"/>
+				</section>
+				<section data-transition="none">
+					<img src="images/qwords/qwords_interface04.png"/>
+				</section>
+				<section data-transition="none">
+					<img src="images/qwords/qwords_interface05.png"/>
+				</section>
+				<section>
+					<h2>Lines of code</h2>
+					<img src="images/qwords/loc.png" style="border:0"/>
+				</section>
+				<section>
+					<h2>Thanks</h2>
+					<h3>Fun with processes</h3>
+					<p>
+						<img width="96px" height="96px" src="https://qwords-app.com/images/logo.png" style="border:0; box-shadow: none;"/>
+						<br/>
+						<a href="https://qwords-app.com/">https://qwords-app.com/</a>
+					</p>
+					<p>
+						<img width="128px" height="128px" src="http://tulinmola.com/tulinmola.jpg" style="border-radius:50%"/>
+						<br/>
+						<small>by <a href="http://twitter.com/tulinmola">@tulinmola</a></small>
+					</p>
+				</section>
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+			// More info about config & dependencies:
+			// - https://github.com/hakimel/reveal.js#configuration
+			// - https://github.com/hakimel/reveal.js#dependencies
+			Reveal.initialize({
+				dependencies: [
+					{ src: 'plugin/markdown/marked.js' },
+					{ src: 'plugin/markdown/markdown.js' },
+					{ src: 'plugin/notes/notes.js', async: true },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+				]
+			});
+		</script>
+	</body>
+</html>
